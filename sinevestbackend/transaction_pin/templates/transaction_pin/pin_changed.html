@@ -1,0 +1,21 @@
+{% extends "authentication/base_email.html" %}
+
+{% block title %}Transaction PIN Changed{% endblock %}
+
+{% block content %}
+  <p>Hi {{ first_name }},</p>
+
+  <p>
+    This is a confirmation that your Sinevest Premium transaction PIN
+    was changed successfully.
+  </p>
+
+  <p>
+    If you did not make this change, please contact support immediately
+    and reset your password, as your account may be compromised.
+  </p>
+
+  <p>
+    <a href="{{ FRONTEND_URL }}/dashboard" class="btn">Go to Dashboard</a>
+  </p>
+{% endblock %}

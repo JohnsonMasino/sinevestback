@@ -1,0 +1,10 @@
+{% extends "authentication/base_email.html" %}
+
+{% block title %}Account disabled{% endblock %}
+
+{% block content %}
+    <h2 style="margin-top:0;">Your account has been disabled</h2>
+    <p>Hi {{ user.first_name }},</p>
+    <p>Your Sinevest Premium account has been disabled by an administrator. You can still log in, but you won't be able to perform actions like deposits, withdrawals, or trades until it's re-enabled.</p>
+    <p>If you believe this is a mistake, please contact support.</p>
+{% endblock %}

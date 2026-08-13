@@ -1,0 +1,14 @@
+{% extends "authentication/base_email.html" %}
+
+{% block title %}KYC update{% endblock %}
+
+{% block content %}
+    <h2 style="margin-top:0;">Your KYC submission needs attention</h2>
+    <p>Hi {{ user.first_name }},</p>
+    <p>We've reviewed your Sinevest Premium KYC submission and were unable to approve it at this time.</p>
+    {% if reason %}
+        <p style="background-color:#f4f5f7;padding:12px 16px;border-radius:4px;"><strong>Reason:</strong> {{ reason }}</p>
+    {% endif %}
+    <p>Please update your details and resubmit for review.</p>
+    <p><a href="{{ FRONTEND_URL }}" style="color:#0b1f3a;">Go to Sinevest Premium</a></p>
+{% endblock %}

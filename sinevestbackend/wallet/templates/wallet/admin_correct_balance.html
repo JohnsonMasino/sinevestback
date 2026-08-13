@@ -1,0 +1,15 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<h1>Correct balance — {{ wallet.user.email }}</h1>
+
+<p>
+    Current available balance: <strong>{{ wallet.available_balance }}</strong><br>
+    Current locked balance: <strong>{{ wallet.locked_balance }}</strong>
+</p>
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <input type="submit" value="Apply correction" class="default">
+</form>
+{% endblock %}

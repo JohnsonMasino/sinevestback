@@ -1,0 +1,22 @@
+{% extends "authentication/base_email.html" %}
+
+{% block title %}Withdrawal Submitted{% endblock %}
+
+{% block content %}
+  <p>Hi {{ first_name }},</p>
+
+  <p>
+    Your withdrawal request of <strong>${{ amount }}</strong> to
+    <span style="word-break: break-all;">{{ wallet_address }}</span> has
+    been confirmed and is now in our processing queue.
+  </p>
+
+  <p>
+    Reference: <strong>Withdrawal #{{ withdrawal_id }}</strong><br />
+    We'll email you again once it's been reviewed.
+  </p>
+
+  <p>
+    <a href="{{ FRONTEND_URL }}/withdrawals" class="btn">View Withdrawal Status</a>
+  </p>
+{% endblock %}
