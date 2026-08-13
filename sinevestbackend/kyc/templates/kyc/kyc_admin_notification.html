@@ -1,0 +1,9 @@
+{% extends "authentication/base_email.html" %}
+
+{% block title %}New KYC submission{% endblock %}
+
+{% block content %}
+    <h2 style="margin-top:0;">New KYC submission pending review</h2>
+    <p>{{ user.email }} ({{ user.first_name }} {{ user.last_name }}) has submitted KYC details for review.</p>
+    <p>Log in to the Django admin to review the submission.</p>
+{% endblock %}

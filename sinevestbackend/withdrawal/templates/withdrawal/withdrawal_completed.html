@@ -1,0 +1,17 @@
+{% extends "authentication/base_email.html" %}
+
+{% block title %}Withdrawal Completed{% endblock %}
+
+{% block content %}
+  <p>Hi {{ first_name }},</p>
+
+  <p>
+    Good news — your withdrawal of <strong>${{ amount }}</strong> to
+    <span style="word-break: break-all;">{{ wallet_address }}</span> has
+    been completed as of {{ processed_at }}.
+  </p>
+
+  <p>
+    <a href="{{ FRONTEND_URL }}/wallet" class="btn">View Wallet</a>
+  </p>
+{% endblock %}

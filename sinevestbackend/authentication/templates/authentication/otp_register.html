@@ -1,0 +1,12 @@
+{% extends "authentication/base_email.html" %}
+
+{% block title %}Verify your email{% endblock %}
+
+{% block content %}
+    <h2 style="margin-top:0;">Verify your email</h2>
+    <p>Hi {{ user.first_name }},</p>
+    <p>Use the code below to verify your Sinevest Premium account. This code expires shortly.</p>
+    <p style="font-size:28px;font-weight:bold;letter-spacing:4px;text-align:center;padding:16px 0;">{{ otp_code }}</p>
+    <p>If you didn't request this, you can safely ignore this email.</p>
+    <p><a href="{{ FRONTEND_URL }}" style="color:#0b1f3a;">Go to Sinevest Premium</a></p>
+{% endblock %}

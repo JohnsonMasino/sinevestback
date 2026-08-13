@@ -1,0 +1,23 @@
+{% extends "authentication/base_email.html" %}
+
+{% block title %}Withdrawal Rejected{% endblock %}
+
+{% block content %}
+  <p>Hi {{ first_name }},</p>
+
+  <p>
+    Unfortunately, your withdrawal request of <strong>${{ amount }}</strong>
+    to <span style="word-break: break-all;">{{ wallet_address }}</span>
+    could not be processed.
+  </p>
+
+  {% if admin_notes %}
+    <p><strong>Reason:</strong> {{ admin_notes }}</p>
+  {% endif %}
+
+  <p>No funds were deducted from your wallet. If you have questions, please contact support.</p>
+
+  <p>
+    <a href="{{ FRONTEND_URL }}/withdrawals" class="btn">View Withdrawal Status</a>
+  </p>
+{% endblock %}

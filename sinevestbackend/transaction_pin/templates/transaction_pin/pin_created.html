@@ -1,0 +1,22 @@
+{% extends "authentication/base_email.html" %}
+
+{% block title %}Transaction PIN Created{% endblock %}
+
+{% block content %}
+  <p>Hi {{ first_name }},</p>
+
+  <p>
+    Your Sinevest Premium transaction PIN has been created successfully.
+    You'll need this PIN to authorize withdrawals and other sensitive
+    account actions going forward.
+  </p>
+
+  <p>
+    If you did not perform this action, please secure your account
+    immediately by resetting your password and contacting support.
+  </p>
+
+  <p>
+    <a href="{{ FRONTEND_URL }}/dashboard" class="btn">Go to Dashboard</a>
+  </p>
+{% endblock %}

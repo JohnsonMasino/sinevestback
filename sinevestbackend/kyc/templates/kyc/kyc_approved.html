@@ -1,0 +1,10 @@
+{% extends "authentication/base_email.html" %}
+
+{% block title %}KYC approved{% endblock %}
+
+{% block content %}
+    <h2 style="margin-top:0;">Your KYC has been approved</h2>
+    <p>Hi {{ user.first_name }},</p>
+    <p>Good news — your Sinevest Premium KYC submission has been reviewed and approved. Your account now carries a verified status.</p>
+    <p><a href="{{ FRONTEND_URL }}" style="color:#0b1f3a;">Go to Sinevest Premium</a></p>
+{% endblock %}
