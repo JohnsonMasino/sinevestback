@@ -1,0 +1,21 @@
+{% extends "authentication/base_email.html" %}
+
+{% block title %}Profile Updated{% endblock %}
+
+{% block content %}
+  <p>Hi {{ first_name }},</p>
+
+  <p>
+    This is a confirmation that your Sinevest Premium profile details were
+    updated successfully.
+  </p>
+
+  <p>
+    If you did not make this change, please contact support and consider
+    changing your password.
+  </p>
+
+  <p>
+    <a href="{{ FRONTEND_URL }}/profile" class="btn">View Profile</a>
+  </p>
+{% endblock %}

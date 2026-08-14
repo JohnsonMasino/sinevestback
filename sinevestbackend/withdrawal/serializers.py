@@ -83,6 +83,25 @@ class WithdrawalConfirmSerializer(serializers.Serializer):
         return attrs
 
 
+class WithdrawalInitiateResponseSerializer(serializers.Serializer):
+    """Docs-only: shape of the 201 response from /initiate/."""
+
+    id = serializers.UUIDField()
+    amount = serializers.DecimalField(max_digits=18, decimal_places=2)
+    wallet_address = serializers.CharField()
+    network = serializers.CharField()
+    status = serializers.CharField()
+    message = serializers.CharField()
+
+
+class WithdrawalConfirmResponseSerializer(serializers.Serializer):
+    """Docs-only: shape of the 200 response from /confirm/."""
+
+    id = serializers.UUIDField()
+    status = serializers.CharField()
+    message = serializers.CharField()
+
+
 class WithdrawalSerializer(serializers.ModelSerializer):
     """Used for list/detail responses."""
 

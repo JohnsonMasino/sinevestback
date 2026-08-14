@@ -5,6 +5,12 @@ from .models import PinChangeOTP, TransactionPin
 from .services import create_pin_change_otp, get_latest_valid_pin_change_otp
 
 
+class MessageResponseSerializer(serializers.Serializer):
+    """Generic {"message": "..."} response shape, used for docs only."""
+
+    message = serializers.CharField()
+
+
 def _validate_4_digit_pin(value, field_name="PIN"):
     if not value.isdigit() or len(value) != 4:
         raise serializers.ValidationError(f"{field_name} must be exactly 4 digits.")

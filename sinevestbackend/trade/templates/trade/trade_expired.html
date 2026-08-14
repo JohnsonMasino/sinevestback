@@ -1,0 +1,23 @@
+{% extends "authentication/base_email.html" %}
+
+{% block title %}Trade Completed{% endblock %}
+
+{% block content %}
+  <p>Hi {{ first_name }},</p>
+
+  <p>
+    Your trade on the <strong>{{ plan_name }}</strong> has matured and been
+    closed as of {{ closed_at }}.
+  </p>
+
+  <ul>
+    <li>Principal returned: <strong>${{ amount }}</strong></li>
+    <li>Profit earned: <strong>${{ actual_profit_paid }}</strong></li>
+  </ul>
+
+  <p>Both have been credited to your available wallet balance.</p>
+
+  <p>
+    <a href="{{ FRONTEND_URL }}/wallet" class="btn">View Wallet</a>
+  </p>
+{% endblock %}

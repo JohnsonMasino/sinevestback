@@ -20,6 +20,8 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    "jazzmin",
+    "drf_spectacular",
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -29,7 +31,6 @@ INSTALLED_APPS = [
 
     "rest_framework",
     "rest_framework_simplejwt",
-    "jazzmin",
 
     "authentication",
     "kyc",
@@ -37,6 +38,9 @@ INSTALLED_APPS = [
     "deposit",
     "transaction_pin",
     "withdrawal",
+    "trade",
+    "transaction_history",
+    "user_profile",
 ]
 
 MIDDLEWARE = [
@@ -87,8 +91,15 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Sinevest Premium API",
+    "DESCRIPTION": "Trading platform API — auth, KYC, wallet, deposits, withdrawals, trades, and transaction history.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+}
 
 from datetime import timedelta
 SIMPLE_JWT = {
@@ -142,91 +153,67 @@ MIN_WITHDRAWAL_AMOUNT = config("MIN_WITHDRAWAL_AMOUNT", default="20.00")
 PENDING_TRANSACTION_EXPIRY_MINUTES = config("PENDING_TRANSACTION_EXPIRY_MINUTES", default=5, cast=int)
 
 
-# ─── JAZZMIN (Django Admin theme) ───────────────────────────────────────
+# ─── JAZZMIN ──────────────────────────────────────────────
 JAZZMIN_SETTINGS = {
-    "site_title": "NovafinAlliance Admin",
-    "site_header": "NovafinAlliance",
-    "site_brand": "NovafinAlliance",
-    "welcome_sign": "Welcome to the NovafinAlliance control panel",
-    "copyright": "NovafinAlliance",
-    "search_model": ["authentication.User"],
-
+    "site_title":        "Sinevest Admin",
+    "site_header":       "Sinevest",
+    "site_brand":        "Sinevest",
+    "welcome_sign":      "Welcome to Sinevest Control Panel",
+    "copyright":         "Sinevest Inc.",
+    "search_model":      ["accounts.User"],
     "topmenu_links": [
-        {"name": "Dashboard", "url": "admin:index", "permissions": ["auth.view_user"]},
-        {"name": "API Docs", "url": "/api/docs/", "new_window": True},
-        {"name": "Redoc", "url": "/api/redoc/", "new_window": True},
+        {"name": "Home",  "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"name": "Site",  "url": "/", "new_window": True},
+        {"name": "Docs",  "url": "/swagger/", "new_window": True},
     ],
-
-    "show_sidebar": True,
-    "navigation_expanded": False,   # collapsed by default — less visual noise on load
-
+    "show_sidebar":         True,
+    "navigation_expanded":  True,
     "icons": {
-        "authentication": "fas fa-users-cog",
-        "authentication.User": "fas fa-user",
-        "authentication.OTP": "fas fa-key",
-        "authentication.PasswordResetToken": "fas fa-unlock-alt",
-
-        "kyc": "fas fa-id-card",
-        "kyc.KYCProfile": "fas fa-id-card",
-
-        "transactionpin": "fas fa-shield-alt",
-        "transactionpin.TransactionPin": "fas fa-lock",
-
-        "wallet": "fas fa-wallet",
-        "wallet.WalletAccount": "fas fa-university",
-        "wallet.Transaction": "fas fa-receipt",
-
-        "transfers": "fas fa-exchange-alt",
-        "transfers.Transfer": "fas fa-paper-plane",
-        "transfers.TransferOTP": "fas fa-key",
-
-        "loans": "fas fa-hand-holding-usd",
-        "loans.Loan": "fas fa-file-invoice-dollar",
-        "loans.LoanRepayment": "fas fa-money-check-alt",
-
-        "cards": "fas fa-credit-card",
-        "cards.VirtualCard": "fas fa-credit-card",
-
-        "auth.Group": "fas fa-layer-group",
+        "accounts":             "fas fa-users-cog",
+        "accounts.User":        "fas fa-user",
+        "accounts.OTPCode":     "fas fa-key",
+        "wallet":               "fas fa-wallet",
+        "investment":           "fas fa-chart-line",
+        "management":           "fas fa-cogs",
+        "auth.Group":           "fas fa-layer-group",
     },
-
-    "default_icon_parents": "fas fa-folder",
+    "default_icon_parents":  "fas fa-chevron-circle-right",
     "default_icon_children": "fas fa-circle",
-
-    "related_modal_active": False,   # plain links instead of popup modals — simpler, fewer surprises
-    "use_google_fonts_cdn": True,
-    "show_ui_builder": False,        # hide the theme-tweaking UI — keeps admin focused
-    "changeform_format": "single",   # single flat form instead of horizontal tabs — easier to scan
+    "related_modal_active":   True,
+    "use_google_fonts_cdn":   True,
+    "show_ui_builder":        False,
+    "changeform_format":      "horizontal_tabs",
+    "language_chooser":       False,
 }
 
 JAZZMIN_UI_TWEAKS = {
-    "navbar_small_text": False,
-    "footer_small_text": True,
-    "body_small_text": False,
-    "brand_small_text": False,
-    "brand_colour": False,
-    "accent": "accent-primary",
-    "navbar": "navbar-white navbar-light",   # light navbar instead of dark — cleaner, less heavy
-    "no_navbar_border": True,
-    "navbar_fixed": True,
-    "layout_boxed": False,
-    "footer_fixed": False,
-    "sidebar_fixed": True,
-    "sidebar": "sidebar-light-primary",      # light sidebar — much simpler than dark
+    "navbar_small_text":   False,
+    "footer_small_text":   False,
+    "body_small_text":     False,
+    "brand_small_text":    False,
+    "brand_colour":        "navbar-primary",
+    "accent":              "accent-primary",
+    "navbar":              "navbar-dark",
+    "no_navbar_border":    False,
+    "navbar_fixed":        True,
+    "layout_boxed":        False,
+    "footer_fixed":        False,
+    "sidebar_fixed":       True,
+    "sidebar":             "sidebar-dark-primary",
     "sidebar_nav_small_text": False,
-    "sidebar_disable_expand": False,
+    "sidebar_disable_expand":  False,
     "sidebar_nav_child_indent": True,
-    "sidebar_nav_compact_style": True,       # tighter spacing, less scrolling through the 7 apps
-    "sidebar_nav_legacy_style": False,
-    "sidebar_nav_flat_style": True,          # flat rows, no card-like nesting — clearer hierarchy
-    "theme": "flatly",                       # clean, minimal Bootswatch theme instead of the default
-    "dark_mode_theme": None,
+    "sidebar_nav_compact_style": False,
+    "sidebar_nav_legacy_style":  False,
+    "sidebar_nav_flat_style":    False,
+    "theme":               "default",
+    "dark_mode_theme":     None,
     "button_classes": {
-        "primary": "btn-primary",
-        "secondary": "btn-secondary",
-        "info": "btn-info",
-        "warning": "btn-warning",
-        "danger": "btn-danger",
-        "success": "btn-success",
+        "primary":  "btn-primary",
+        "secondary":"btn-secondary",
+        "info":     "btn-info",
+        "warning":  "btn-warning",
+        "danger":   "btn-danger",
+        "success":  "btn-success",
     },
 }
