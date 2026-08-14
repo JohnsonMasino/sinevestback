@@ -56,11 +56,11 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "https://www.sinevestpremium.net",
-]
-
+CORS_ALLOWED_ORIGINS = config(
+    "CORS_ALLOWED_ORIGINS",
+    default="http://localhost:5173,https://www.sinevestpremium.net",
+    cast=lambda v: [s.strip() for s in v.split(",")],
+)
 ROOT_URLCONF = 'core.urls'
 
 TEMPLATES = [
@@ -146,6 +146,15 @@ USE_I18N = True
 
 USE_TZ = True
 
+
+# ─── Email (Mailgun) ──────────────────────────────────────
+MAILGUN_API_KEY = config("MAILGUN_API_KEY")
+MAILGUN_DOMAIN = config("MAILGUN_DOMAIN")
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL")
+NOTICE_FROM_EMAIL = config("NOTICE_FROM_EMAIL")
+
+# ─── Cron ─────────────────────────────────────────────────
+CRON_SECRET_KEY = config("CRON_SECRET_KEY")
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
