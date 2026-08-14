@@ -124,3 +124,24 @@ class KYCCompletionSectionsSerializer(serializers.Serializer):
 class KYCCompletionSerializer(serializers.Serializer):
     overall_percentage = serializers.IntegerField()
     sections = KYCCompletionSectionsSerializer()
+
+
+# ---------------------------------------------------------------------------
+# Docs-only serializers — exist purely so drf-spectacular can render accurate
+# Swagger/Redoc schemas for response shapes that don't map to a single
+# ModelSerializer (a combined message+data body, or a generic error shape).
+# ---------------------------------------------------------------------------
+
+
+class ErrorDetailSerializer(serializers.Serializer):
+    """Docs-only: generic {"detail": "..."} error response shape, reused across several endpoints."""
+
+    detail = serializers.CharField()
+
+
+class KYCSubmitFullResponseSerializer(serializers.Serializer):
+    """Docs-only: shape of the 200 response from POST /api/kyc/submit/ (message + status + submitted_at)."""
+
+    message = serializers.CharField()
+    status = serializers.CharField()
+    submitted_at = serializers.DateTimeField()

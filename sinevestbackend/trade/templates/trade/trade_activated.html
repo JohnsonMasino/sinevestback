@@ -1,0 +1,26 @@
+{% extends "authentication/base_email.html" %}
+
+{% block title %}Trade Activated{% endblock %}
+
+{% block content %}
+  <p>Hi {{ first_name }},</p>
+
+  <p>
+    Your trade on the <strong>{{ plan_name }}</strong> has been activated.
+  </p>
+
+  <ul>
+    <li>Amount locked: <strong>${{ amount }}</strong></li>
+    <li>Expected profit: <strong>${{ expected_profit }}</strong></li>
+    <li>Maturity date: <strong>{{ matures_at }}</strong></li>
+  </ul>
+
+  <p>
+    We'll email you again once this trade matures and your principal plus
+    profit is credited back to your wallet.
+  </p>
+
+  <p>
+    <a href="{{ FRONTEND_URL }}/trades" class="btn">View My Trades</a>
+  </p>
+{% endblock %}

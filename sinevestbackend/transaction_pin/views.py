@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -11,6 +12,7 @@ from .emails import (
 )
 from .models import TransactionPin
 from .serializers import (
+    MessageResponseSerializer,
     PinChangeConfirmSerializer,
     PinChangeInitiateSerializer,
     PinCreateSerializer,
@@ -34,6 +36,7 @@ class PinCreateView(APIView):
 
     permission_classes = [permissions.IsAuthenticated, IsAccountActiveAndAllowedToAct]
 
+    @extend_schema(request=PinCreateSerializer, responses={201: MessageResponseSerializer})
     def post(self, request):
         serializer = PinCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
@@ -52,6 +55,7 @@ class PinChangeInitiateView(APIView):
 
     permission_classes = [permissions.IsAuthenticated, IsAccountActiveAndAllowedToAct]
 
+    @extend_schema(request=PinChangeInitiateSerializer, responses={200: MessageResponseSerializer})
     def post(self, request):
         serializer = PinChangeInitiateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
@@ -70,6 +74,7 @@ class PinChangeConfirmView(APIView):
 
     permission_classes = [permissions.IsAuthenticated, IsAccountActiveAndAllowedToAct]
 
+    @extend_schema(request=PinChangeConfirmSerializer, responses={200: MessageResponseSerializer})
     def post(self, request):
         serializer = PinChangeConfirmSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)

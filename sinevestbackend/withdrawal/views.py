@@ -1,3 +1,4 @@
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from django.db import transaction
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
@@ -11,7 +12,9 @@ from .emails import (
 )
 from .models import Withdrawal
 from .serializers import (
+    WithdrawalConfirmResponseSerializer,
     WithdrawalConfirmSerializer,
+    WithdrawalInitiateResponseSerializer,
     WithdrawalInitiateSerializer,
     WithdrawalSerializer,
 )
@@ -23,6 +26,7 @@ class WithdrawalInitiateView(APIView):
 
     permission_classes = [permissions.IsAuthenticated, IsAccountActiveAndAllowedToAct]
 
+    @extend_schema(request=WithdrawalInitiateSerializer, responses={201: WithdrawalInitiateResponseSerializer})
     def post(self, request):
         serializer = WithdrawalInitiateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
@@ -51,6 +55,13 @@ class WithdrawalConfirmView(APIView):
 
     permission_classes = [permissions.IsAuthenticated, IsAccountActiveAndAllowedToAct]
 
+    @extend_schema(
+        request=WithdrawalConfirmSerializer,
+        responses={
+            200: WithdrawalConfirmResponseSerializer,
+            410: OpenApiResponse(description="Withdrawal request expired and was deleted by the cleanup cron."),
+        },
+    )
     def post(self, request, pk):
         try:
             withdrawal = Withdrawal.objects.get(pk=pk, user=request.user)

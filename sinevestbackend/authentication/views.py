@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -16,8 +17,12 @@ from .emails import (
 )
 from .models import OTP, PasswordResetToken
 from .serializers import (
+    ErrorDetailSerializer,
     ForgotPasswordSerializer,
+    LoginResponseSerializer,
     LoginSerializer,
+    MessageResponseSerializer,
+    RegisterResponseSerializer,
     RegisterSerializer,
     ResendOTPSerializer,
     ResetPasswordConfirmSerializer,
@@ -35,10 +40,63 @@ def _tokens_for_user(user):
 
 
 class RegisterView(APIView):
-    """POST /api/auth/register/ — create account, send OTP."""
+    """
+    POST /api/auth/register/
+
+    Creates a new account and emails a 6-digit OTP for verification. The
+    account is created immediately in an unverified state (is_verified=False)
+    and cannot log in until the OTP is confirmed via
+    POST /api/auth/verify-otp/. No token is issued by this endpoint.
+    """
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        summary="Register a new account",
+        description=(
+            "Creates a new, unverified account and emails a 6-digit OTP to the given address. "
+            "The response does NOT include an access/refresh token — the frontend should route "
+            "the user to an 'enter OTP' screen next, then call /api/auth/verify-otp/, then "
+            "/api/auth/login/."
+        ),
+        request=RegisterSerializer,
+        responses={
+            201: OpenApiResponse(
+                response=RegisterResponseSerializer,
+                description="Account created; OTP emailed.",
+                examples=[
+                    OpenApiExample(
+                        "Success",
+                        value={
+                            "message": "Registration successful. Check your email for the OTP.",
+                            "email": "jane@example.com",
+                        },
+                    )
+                ],
+            ),
+            400: OpenApiResponse(
+                description="Validation error — field name(s) map to a list of error messages.",
+                examples=[
+                    OpenApiExample(
+                        "Email already taken",
+                        value={"email": ["An account with this email already exists."]},
+                    ),
+                    OpenApiExample(
+                        "Passwords don't match",
+                        value={"confirm_password": ["Passwords do not match."]},
+                    ),
+                    OpenApiExample(
+                        "Weak password",
+                        value={"password": ["This password is too common."]},
+                    ),
+                    OpenApiExample(
+                        "Missing name field",
+                        value={"first_name": ["This field is required."]},
+                    ),
+                ],
+            ),
+        },
+    )
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -61,10 +119,41 @@ class RegisterView(APIView):
 
 
 class VerifyOTPView(APIView):
-    """POST /api/auth/verify-otp/ — confirm OTP, mark account verified."""
+    """
+    POST /api/auth/verify-otp/
+
+    Confirms the OTP sent at registration and flips the account to
+    is_verified=True. Does NOT log the user in — no token is returned;
+    the frontend should redirect to the login screen afterward.
+    """
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        summary="Confirm registration OTP",
+        description="Marks the account as verified. Does not log the user in — no token is returned here.",
+        request=VerifyOTPSerializer,
+        responses={
+            200: OpenApiResponse(
+                response=MessageResponseSerializer,
+                description="Email verified successfully.",
+                examples=[
+                    OpenApiExample(
+                        "Success",
+                        value={"message": "Email verified successfully. You can now log in."},
+                    )
+                ],
+            ),
+            400: OpenApiResponse(
+                response=ErrorDetailSerializer,
+                description="OTP is invalid, already used, or expired.",
+                examples=[OpenApiExample("Invalid OTP", value={"detail": "Invalid or expired OTP."})],
+            ),
+            404: OpenApiResponse(
+                response=ErrorDetailSerializer, description="No account exists for the given email."
+            ),
+        },
+    )
     def post(self, request):
         serializer = VerifyOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -93,11 +182,40 @@ class VerifyOTPView(APIView):
 
 
 class ResendOTPView(APIView):
-    """POST /api/auth/resend-otp/ — re-send a fresh registration OTP."""
+    """
+    POST /api/auth/resend-otp/
+
+    Issues a fresh registration OTP. Rate-limited to one request per 60
+    seconds per user to prevent email spamming.
+    """
 
     permission_classes = [AllowAny]
     RESEND_COOLDOWN_SECONDS = 60
 
+    @extend_schema(
+        summary="Resend registration OTP",
+        description="Sends a new 6-digit OTP to the given email. Rate-limited to one request per 60 seconds.",
+        request=ResendOTPSerializer,
+        responses={
+            200: OpenApiResponse(
+                response=MessageResponseSerializer,
+                examples=[OpenApiExample("Success", value={"message": "A new OTP has been sent to your email."})],
+            ),
+            404: OpenApiResponse(
+                response=ErrorDetailSerializer, description="No account exists for the given email."
+            ),
+            429: OpenApiResponse(
+                response=ErrorDetailSerializer,
+                description="Too soon since the last OTP was sent.",
+                examples=[
+                    OpenApiExample(
+                        "Rate limited",
+                        value={"detail": "Please wait a minute before requesting another OTP."},
+                    )
+                ],
+            ),
+        },
+    )
     def post(self, request):
         serializer = ResendOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -120,14 +238,64 @@ class ResendOTPView(APIView):
 
 class LoginView(APIView):
     """
-    POST /api/auth/login/ — email + password -> access/refresh token.
+    POST /api/auth/login/
+
     Deliberately does NOT use Django's authenticate()/ModelBackend, since
     that silently blocks is_active=False users. Login must succeed for
-    inactive accounts; only is_verified gates login.
+    inactive accounts (only account-active status blocks state-changing
+    actions elsewhere in the platform); only is_verified gates login here.
     """
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        summary="Log in",
+        description=(
+            "Exchanges email + password for a JWT access/refresh pair. Login succeeds even if "
+            "the account has been deactivated by an admin (is_active=False) — deactivation only "
+            "blocks state-changing actions elsewhere, not login itself. Login FAILS if the "
+            "account's email has not yet been verified via OTP."
+        ),
+        request=LoginSerializer,
+        responses={
+            200: OpenApiResponse(
+                response=LoginResponseSerializer,
+                description="Login successful.",
+                examples=[
+                    OpenApiExample(
+                        "Success",
+                        value={
+                            "access": "eyJhbGciOiJIUzI1NiIs...",
+                            "refresh": "eyJhbGciOiJIUzI1NiIs...",
+                            "user": {
+                                "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                                "email": "jane@example.com",
+                                "first_name": "Jane",
+                                "last_name": "Doe",
+                                "is_verified": True,
+                                "is_active": True,
+                                "date_joined": "2026-08-01T10:00:00Z",
+                            },
+                        },
+                    )
+                ],
+            ),
+            401: OpenApiResponse(
+                response=ErrorDetailSerializer,
+                description="Email/password combination is incorrect.",
+                examples=[OpenApiExample("Bad credentials", value={"detail": "Invalid email or password."})],
+            ),
+            403: OpenApiResponse(
+                response=ErrorDetailSerializer,
+                description="Account exists but email is not yet verified.",
+                examples=[
+                    OpenApiExample(
+                        "Unverified", value={"detail": "Please verify your email before logging in."}
+                    )
+                ],
+            ),
+        },
+    )
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -150,13 +318,36 @@ class LoginView(APIView):
 
 class ForgotPasswordView(APIView):
     """
-    POST /api/auth/forgot-password/ — send password reset link.
-    Always returns a generic message to avoid user enumeration.
+    POST /api/auth/forgot-password/
+
+    Always returns the same generic 200 message whether or not the email
+    exists, to avoid leaking which emails are registered (user enumeration
+    protection). If the account exists, a reset link is emailed.
     """
 
     permission_classes = [AllowAny]
     GENERIC_MESSAGE = "If an account exists for this email, a reset link has been sent."
 
+    @extend_schema(
+        summary="Request a password reset link",
+        description=(
+            "Always returns 200 with the same generic message, regardless of whether the email "
+            "exists, to prevent account enumeration. If it does exist, an email containing a "
+            "reset link (with a token embedded in the URL) is sent."
+        ),
+        request=ForgotPasswordSerializer,
+        responses={
+            200: OpenApiResponse(
+                response=MessageResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "Always this shape, regardless of whether the email exists",
+                        value={"message": "If an account exists for this email, a reset link has been sent."},
+                    )
+                ],
+            ),
+        },
+    )
     def post(self, request):
         serializer = ForgotPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -172,10 +363,44 @@ class ForgotPasswordView(APIView):
 
 
 class ResetPasswordConfirmView(APIView):
-    """POST /api/auth/reset-password-confirm/ — set new password via id + token."""
+    """
+    POST /api/auth/reset-password-confirm/
+
+    Sets a new password using the {id, token} pair embedded in the reset
+    link's URL (e.g. {FRONTEND_URL}/reset-password/{id}/{token}). The
+    frontend should parse both values out of the URL and submit them here
+    alongside the new password.
+    """
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        summary="Confirm password reset",
+        description=(
+            "Sets a new password using the {id, token} pair from the reset link's URL. Both "
+            "values must be extracted from the link the user received by email — "
+            "'{FRONTEND_URL}/reset-password/{id}/{token}'."
+        ),
+        request=ResetPasswordConfirmSerializer,
+        responses={
+            200: OpenApiResponse(
+                response=MessageResponseSerializer,
+                examples=[
+                    OpenApiExample("Success", value={"message": "Password has been reset successfully."})
+                ],
+            ),
+            400: OpenApiResponse(
+                response=ErrorDetailSerializer,
+                description="Token is invalid, already used, expired, or passwords didn't match / failed validation.",
+                examples=[
+                    OpenApiExample("Bad link", value={"detail": "Invalid or expired reset link."}),
+                    OpenApiExample(
+                        "Passwords don't match", value={"confirm_password": ["Passwords do not match."]}
+                    ),
+                ],
+            ),
+        },
+    )
     def post(self, request):
         serializer = ResetPasswordConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -211,5 +436,10 @@ class MeView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Get current user",
+        description="Returns the authenticated user's own basic account info. Requires a valid access token.",
+        responses={200: UserSerializer},
+    )
     def get(self, request):
         return Response(UserSerializer(request.user).data, status=status.HTTP_200_OK)
