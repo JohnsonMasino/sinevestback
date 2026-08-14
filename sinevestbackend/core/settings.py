@@ -14,8 +14,7 @@ SECRET_KEY = 'django-insecure-t%8l!m^j)4kfiq0$wp0ck1-xj!f+bxr!s67ehys^1-+y785=g@
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
-
+ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="sinevestback.onrender.com", cast=lambda v: [s.strip() for s in v.split(",")])
 
 # Application definition
 
