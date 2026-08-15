@@ -2,6 +2,7 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class Deposit(models.Model):
@@ -36,11 +37,16 @@ class Deposit(models.Model):
         blank=True, help_text="Optional reason, shown to the user if the deposit is rejected."
     )
     created_at = models.DateTimeField(
-        auto_now_add=True, help_text="Immutable — when the user submitted the request."
+        default=timezone.now,
+        help_text=(
+            "When the user submitted the request. Auto-set on creation, but "
+            "editable afterward by an admin to correct/backdate/postdate for "
+            "display purposes. The API only ever exposes this read-only."
+        ),
     )
     processed_at = models.DateTimeField(
         null=True, blank=True,
-        help_text="Set automatically the moment an admin moves status away from pending. Never manually editable.",
+        help_text="Auto-set the moment an admin approves/rejects, but freely editable afterward for corrections.",
     )
 
     class Meta:
