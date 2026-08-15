@@ -22,10 +22,17 @@ class WithdrawalAdmin(admin.ModelAdmin):
         return super().get_queryset(request)
 
     def get_readonly_fields(self, request, obj=None):
-        always_readonly = ["id", "user", "amount", "wallet_address", "network", "created_at", "processed_at"]
+        # `status` is ALWAYS read-only in the change form, in every state.
+        # The only sanctioned way to move a withdrawal to completed/rejected
+        # is through the mark_completed / mark_rejected actions below, which
+        # are the only places that call wallet.services.debit_available().
+        # If `status` were editable here, an admin could save "completed"
+        # directly on the form and silently skip the wallet debit entirely
+        # — which is exactly what was happening before this fix.
+        always_readonly = ["id", "user", "amount", "wallet_address", "network", "status", "created_at", "processed_at"]
         if obj and obj.status in (Withdrawal.Status.COMPLETED, Withdrawal.Status.REJECTED):
-            # Fully locked once resolved.
-            return always_readonly + ["status", "admin_notes"]
+            # Fully locked once resolved — admin_notes can't be edited after the fact either.
+            return always_readonly + ["admin_notes"]
         return always_readonly
 
     @admin.action(description="Mark selected PENDING withdrawals as COMPLETED (debits wallet)")
