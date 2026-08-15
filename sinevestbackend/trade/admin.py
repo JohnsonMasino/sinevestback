@@ -31,15 +31,21 @@ class TradeAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "plan", "amount", "status", "started_at", "matures_at", "closed_at")
     list_filter = ("status", "plan")
     search_fields = ("user__email",)
-    readonly_fields = [f.name for f in Trade._meta.fields]
+
+    def get_readonly_fields(self, request, obj=None):
+        # Everything stays locked EXCEPT the three timestamps. Trade closure
+        # (status + actual_profit_paid) must only ever happen through the
+        # cron endpoint, since that's the single code path that calls
+        # wallet.services.unlock_and_credit() — letting status be edited
+        # here would reproduce the exact bug we just fixed on withdrawals.
+        editable_fields = ("started_at", "matures_at", "closed_at")
+        return [f.name for f in Trade._meta.fields if f.name not in editable_fields]
 
     def has_add_permission(self, request):
         return False
 
     def has_change_permission(self, request, obj=None):
-        # Fully read-only — closure only happens via the cron endpoint,
-        # keeping one single, testable code path for crediting payouts.
-        return False
+        return True
 
     def has_delete_permission(self, request, obj=None):
         return False

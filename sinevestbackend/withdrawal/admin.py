@@ -22,16 +22,16 @@ class WithdrawalAdmin(admin.ModelAdmin):
         return super().get_queryset(request)
 
     def get_readonly_fields(self, request, obj=None):
-        # `status` is ALWAYS read-only in the change form, in every state.
-        # The only sanctioned way to move a withdrawal to completed/rejected
-        # is through the mark_completed / mark_rejected actions below, which
-        # are the only places that call wallet.services.debit_available().
-        # If `status` were editable here, an admin could save "completed"
-        # directly on the form and silently skip the wallet debit entirely
-        # — which is exactly what was happening before this fix.
-        always_readonly = ["id", "user", "amount", "wallet_address", "network", "status", "created_at", "processed_at"]
+        # `status` is ALWAYS read-only here, in every state. The only
+        # sanctioned way to move a withdrawal to completed/rejected is
+        # through the mark_completed / mark_rejected actions below, which
+        # are the only code paths that call wallet.services.debit_available().
+        # `created_at` and `processed_at` are deliberately left OUT of this
+        # list so an admin can correct/backdate/postdate them freely —
+        # that change is display-only and has no wallet effect.
+        always_readonly = ["id", "user", "amount", "wallet_address", "network", "status"]
         if obj and obj.status in (Withdrawal.Status.COMPLETED, Withdrawal.Status.REJECTED):
-            # Fully locked once resolved — admin_notes can't be edited after the fact either.
+            # Notes are locked once resolved so the record of "why" can't be rewritten after the fact.
             return always_readonly + ["admin_notes"]
         return always_readonly
 
@@ -95,7 +95,11 @@ class WithdrawalAdmin(admin.ModelAdmin):
 
 @admin.register(WithdrawalOTP)
 class WithdrawalOTPAdmin(admin.ModelAdmin):
-    """Read-only, for debugging only."""
+    """Read-only for direct add/change — for debugging only. Delete is
+    explicitly allowed so an admin can delete a Withdrawal and let this
+    cascade-delete along with it; without this override, Django's cascade
+    permission check blocks the whole "Delete multiple objects" action
+    whenever a related WithdrawalOTP row exists."""
 
     list_display = ("withdrawal", "code", "is_used", "expires_at", "created_at")
     search_fields = ("withdrawal__id", "withdrawal__user__email")
@@ -107,3 +111,6 @@ class WithdrawalOTPAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+    def has_delete_permission(self, request, obj=None):
+        return True

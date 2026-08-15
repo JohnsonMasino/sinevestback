@@ -1,6 +1,8 @@
 import uuid
+
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class Withdrawal(models.Model):
@@ -38,9 +40,12 @@ class Withdrawal(models.Model):
     )
     admin_notes = models.TextField(blank=True)
 
-    # Immutable — never exposed as editable in API or admin.
-    created_at = models.DateTimeField(auto_now_add=True)
-    # Auto-set server-side by admin.py when status moves to completed/rejected.
+    # Auto-set to now() on creation, but editable afterward by an admin —
+    # e.g. to backdate or postdate a request for display purposes. The API
+    # never accepts this field for writes; only the Django admin can change it.
+    created_at = models.DateTimeField(default=timezone.now)
+    # Auto-set server-side by admin.py when status moves to completed/rejected,
+    # but also freely editable by an admin afterward for the same reason.
     processed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

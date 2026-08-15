@@ -16,9 +16,10 @@ class DepositAdmin(admin.ModelAdmin):
     search_fields = ("id", "user__email")
     ordering = ("-created_at",)
 
-    # id and created_at stay immutable; processed_at is intentionally
-    # editable per admin request, so admins can backdate/correct it.
-    readonly_fields = ("id", "user", "amount", "created_at")
+    # id, user, and amount stay immutable. created_at and processed_at are
+    # intentionally left editable so an admin can correct/backdate/postdate
+    # them for display purposes in transaction history.
+    readonly_fields = ("id", "user", "amount")
 
     fields = ("id", "user", "amount", "status", "admin_notes", "created_at", "processed_at")
 
@@ -92,7 +93,10 @@ class DepositAdmin(admin.ModelAdmin):
     # ------------------------------------------------------------------
     # Individual detail-page save: if the admin changes `status` on the
     # change form and saves, route it through the same approve/reject
-    # logic instead of just overwriting the field directly.
+    # logic instead of just overwriting the field directly. Any other
+    # changed fields (created_at, admin_notes) are persisted independently
+    # so they're never silently dropped by _approve/_reject's own
+    # update_fields=["status", "processed_at"] save.
     # ------------------------------------------------------------------
 
     def save_model(self, request, obj, form, change):
@@ -106,16 +110,21 @@ class DepositAdmin(admin.ModelAdmin):
         new_status = obj.status
 
         # Reset to the DB value first so _approve/_reject's own status
-        # check and save() call are the single source of truth.
+        # check and save() call are the single source of truth for the
+        # status transition itself.
         obj.status = previous_status
+
+        # Persist any other changed fields (e.g. a corrected created_at)
+        # up front, independent of the status branch below.
+        other_changed_fields = [f for f in form.changed_data if f != "status"]
+        if other_changed_fields:
+            obj.save(update_fields=other_changed_fields)
 
         if new_status == "approved":
             self._approve(request, obj)
         elif new_status == "rejected":
             self._reject(request, obj)
         else:
-            # e.g. admin manually set it back to "pending" — allow a
-            # plain save for that case (and for admin_notes/processed_at
-            # edits with no status change routed above).
+            # e.g. admin manually set it back to "pending".
             obj.status = new_status
             super().save_model(request, obj, form, change)

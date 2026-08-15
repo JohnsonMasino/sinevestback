@@ -1,6 +1,7 @@
 import uuid
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class TradePlan(models.Model):
@@ -69,7 +70,13 @@ class Trade(models.Model):
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
 
-    started_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(
+        default=timezone.now,
+        help_text=(
+            "When the trade was opened. Auto-set on creation, but editable "
+            "afterward by an admin to correct/backdate/postdate for display purposes."
+        ),
+    )
     matures_at = models.DateTimeField(help_text="started_at + duration_hours, computed at creation.")
     closed_at = models.DateTimeField(null=True, blank=True, help_text="Set automatically by the cron closure job.")
     actual_profit_paid = models.DecimalField(
