@@ -1,6 +1,8 @@
 from rest_framework.permissions import BasePermission
 from rest_framework.exceptions import PermissionDenied
 
+from django.conf import settings
+
 
 class _CodedPermissionDenied(PermissionDenied):
     """
@@ -96,7 +98,7 @@ class IsCronRequest(BasePermission):
 
     Expected header:
 
-        X-Cron-Secret: <CRON_SECRET>
+        X-Cron-Secret: <CRON_SECRET_KEY>
 
     The secret must be stored in the environment and exposed through
     Django settings.
@@ -105,7 +107,7 @@ class IsCronRequest(BasePermission):
     message = "Invalid or missing cron authentication."
 
     def has_permission(self, request, view):
-        configured_secret = getattr(settings, "CRON_SECRET", "")
+        configured_secret = getattr(settings, "CRON_SECRET_KEY", "")
 
         if not configured_secret:
             raise _CodedPermissionDenied(
