@@ -119,8 +119,19 @@ class CloseExpiredTradesCronView(APIView):
         for trade_id in matured_trade_ids:
             try:
                 with transaction.atomic():
-                    trade = Trade.objects.select_for_update().select_related("plan", "user__wallet").get(
-                        id=trade_id, status=Trade.Status.ACTIVE
+                    # of=("self",) restricts the FOR UPDATE lock to the
+                    # Trade row itself. Without it, Postgres tries to lock
+                    # across the select_related("user__wallet") join too —
+                    # and since that's a reverse one-to-one, Django can only
+                    # build it as a LEFT OUTER JOIN, which Postgres refuses
+                    # to lock ("FOR UPDATE cannot be applied to the nullable
+                    # side of an outer join"). select_related is still kept
+                    # here so plan/wallet are eager-loaded; only the lock
+                    # itself is scoped down.
+                    trade = (
+                        Trade.objects.select_for_update(of=("self",))
+                        .select_related("plan", "user__wallet")
+                        .get(id=trade_id, status=Trade.Status.ACTIVE)
                     )
                     trade.actual_profit_paid = trade.expected_profit
                     unlock_and_credit(
