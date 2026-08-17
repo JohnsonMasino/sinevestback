@@ -22,75 +22,125 @@ class WithdrawalAdmin(admin.ModelAdmin):
         return super().get_queryset(request)
 
     def get_readonly_fields(self, request, obj=None):
-        # `status` is ALWAYS read-only here, in every state. The only
-        # sanctioned way to move a withdrawal to completed/rejected is
-        # through the mark_completed / mark_rejected actions below, which
+        # `status` is locked on every EXISTING withdrawal, in every state.
+        # The only sanctioned way to move a saved withdrawal to
+        # completed/rejected is through the mark_completed / mark_rejected
+        # actions (and, for brand-new records, save_model below) — these
         # are the only code paths that call wallet.services.debit_available().
         # `created_at` and `processed_at` are deliberately left OUT of this
         # list so an admin can correct/backdate/postdate them freely —
         # that change is display-only and has no wallet effect.
+        if obj is None:
+            # Add page: an admin creating a withdrawal manually needs to
+            # set user/amount/wallet_address/network, and may optionally
+            # pick a final status (see save_model) — nothing is locked yet.
+            return ["id"]
         always_readonly = ["id", "user", "amount", "wallet_address", "network", "status"]
-        if obj and obj.status in (Withdrawal.Status.COMPLETED, Withdrawal.Status.REJECTED):
+        if obj.status in (Withdrawal.Status.COMPLETED, Withdrawal.Status.REJECTED):
             # Notes are locked once resolved so the record of "why" can't be rewritten after the fact.
             return always_readonly + ["admin_notes"]
         return always_readonly
 
+    def get_changeform_initial_data(self, request):
+        # Manually-created withdrawals skip the OTP step, so default the add
+        # form to "pending" rather than the model's own default of
+        # "pending_otp" (which only makes sense for the user-facing flow).
+        initial = super().get_changeform_initial_data(request)
+        initial.setdefault("status", Withdrawal.Status.PENDING)
+        return initial
+
+    # ------------------------------------------------------------------
+    # Shared complete/reject logic, used by both the bulk actions and
+    # manual creation from the admin (save_model below).
+    # ------------------------------------------------------------------
+
+    def _complete(self, request, withdrawal):
+        if withdrawal.status != Withdrawal.Status.PENDING:
+            self.message_user(
+                request,
+                f"Skipped {withdrawal.id}: only 'pending' withdrawals can be completed.",
+                level=messages.WARNING,
+            )
+            return False
+
+        try:
+            with transaction.atomic():
+                debit_available(
+                    withdrawal.user.wallet,
+                    withdrawal.amount,
+                    reason=f"Withdrawal #{withdrawal.id}",
+                )
+                withdrawal.status = Withdrawal.Status.COMPLETED
+                withdrawal.processed_at = timezone.now()
+                withdrawal.save(update_fields=["status", "processed_at"])
+        except InsufficientFundsError:
+            self.message_user(
+                request,
+                f"Skipped {withdrawal.id}: user no longer has sufficient available balance.",
+                level=messages.ERROR,
+            )
+            return False
+
+        send_withdrawal_completed_email(withdrawal.user, withdrawal)
+        return True
+
+    def _reject(self, request, withdrawal):
+        if withdrawal.status != Withdrawal.Status.PENDING:
+            self.message_user(
+                request,
+                f"Skipped {withdrawal.id}: only 'pending' withdrawals can be rejected.",
+                level=messages.WARNING,
+            )
+            return False
+
+        withdrawal.status = Withdrawal.Status.REJECTED
+        withdrawal.processed_at = timezone.now()
+        withdrawal.save(update_fields=["status", "processed_at"])
+        send_withdrawal_rejected_email(withdrawal.user, withdrawal)
+        return True
+
+    # ------------------------------------------------------------------
+    # Bulk actions (select rows in the list view)
+    # ------------------------------------------------------------------
+
     @admin.action(description="Mark selected PENDING withdrawals as COMPLETED (debits wallet)")
     def mark_completed(self, request, queryset):
-        completed_count = 0
-        for withdrawal in queryset:
-            if withdrawal.status != Withdrawal.Status.PENDING:
-                self.message_user(
-                    request,
-                    f"Skipped {withdrawal.id}: only 'pending' withdrawals can be completed.",
-                    level=messages.WARNING,
-                )
-                continue
-
-            try:
-                with transaction.atomic():
-                    debit_available(
-                        withdrawal.user.wallet,
-                        withdrawal.amount,
-                        reason=f"Withdrawal #{withdrawal.id}",
-                    )
-                    withdrawal.status = Withdrawal.Status.COMPLETED
-                    withdrawal.processed_at = timezone.now()
-                    withdrawal.save(update_fields=["status", "processed_at"])
-            except InsufficientFundsError:
-                self.message_user(
-                    request,
-                    f"Skipped {withdrawal.id}: user no longer has sufficient available balance.",
-                    level=messages.ERROR,
-                )
-                continue
-
-            send_withdrawal_completed_email(withdrawal.user, withdrawal)
-            completed_count += 1
-
+        completed_count = sum(1 for withdrawal in queryset for _ in [self._complete(request, withdrawal)] if _)
         if completed_count:
             self.message_user(request, f"{completed_count} withdrawal(s) marked completed.", level=messages.SUCCESS)
 
     @admin.action(description="Mark selected PENDING withdrawals as REJECTED")
     def mark_rejected(self, request, queryset):
-        rejected_count = 0
-        for withdrawal in queryset:
-            if withdrawal.status != Withdrawal.Status.PENDING:
-                self.message_user(
-                    request,
-                    f"Skipped {withdrawal.id}: only 'pending' withdrawals can be rejected.",
-                    level=messages.WARNING,
-                )
-                continue
-
-            withdrawal.status = Withdrawal.Status.REJECTED
-            withdrawal.processed_at = timezone.now()
-            withdrawal.save(update_fields=["status", "processed_at"])
-            send_withdrawal_rejected_email(withdrawal.user, withdrawal)
-            rejected_count += 1
-
+        rejected_count = sum(1 for withdrawal in queryset for _ in [self._reject(request, withdrawal)] if _)
         if rejected_count:
             self.message_user(request, f"{rejected_count} withdrawal(s) marked rejected.", level=messages.SUCCESS)
+
+    # ------------------------------------------------------------------
+    # Manual creation from the admin: a brand-new withdrawal is always
+    # persisted first as "pending" (no wallet effect, skips pending_otp
+    # entirely since there's no OTP step for an admin-entered request),
+    # then routed through the same _complete/_reject logic as the bulk
+    # actions if the admin chose a final status on the same add form.
+    # Existing withdrawals are untouched here — status stays locked via
+    # get_readonly_fields, so this is just a normal save for them.
+    # ------------------------------------------------------------------
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            desired_status = obj.status
+            obj.status = Withdrawal.Status.PENDING
+            obj.processed_at = None
+            super().save_model(request, obj, form, change)
+
+            if desired_status == Withdrawal.Status.COMPLETED:
+                self._complete(request, obj)
+            elif desired_status == Withdrawal.Status.REJECTED:
+                self._reject(request, obj)
+            # else: left as "pending" (covers a chosen status of
+            # pending_otp or pending too — both just mean "leave it pending").
+            return
+
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(WithdrawalOTP)

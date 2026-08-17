@@ -16,18 +16,27 @@ class DepositAdmin(admin.ModelAdmin):
     search_fields = ("id", "user__email")
     ordering = ("-created_at",)
 
-    # id, user, and amount stay immutable. created_at and processed_at are
-    # intentionally left editable so an admin can correct/backdate/postdate
-    # them for display purposes in transaction history.
-    readonly_fields = ("id", "user", "amount")
+    # id is always locked (model field is non-editable). user and amount are
+    # only locked once the deposit exists — on the "Add deposit" page they
+    # need to be editable so an admin can create a deposit for a user.
+    # created_at and processed_at stay editable so an admin can
+    # correct/backdate/postdate them for display purposes.
+    def get_readonly_fields(self, request, obj=None):
+        if obj is None:
+            return ("id",)
+        return ("id", "user", "amount")
 
-    fields = ("id", "user", "amount", "status", "admin_notes", "created_at", "processed_at")
+    def get_fields(self, request, obj=None):
+        if obj is None:
+            # Add page: no point showing the not-yet-generated id.
+            return ("user", "amount", "status", "admin_notes", "created_at", "processed_at")
+        return ("id", "user", "amount", "status", "admin_notes", "created_at", "processed_at")
 
     actions = ["approve_deposits", "reject_deposits"]
 
     # ------------------------------------------------------------------
-    # Shared approve/reject logic, used by both bulk actions and the
-    # individual detail-page save.
+    # Shared approve/reject logic, used by bulk actions, the individual
+    # detail-page save, and manual creation from the admin.
     # ------------------------------------------------------------------
 
     def _approve(self, request, deposit):
@@ -97,12 +106,29 @@ class DepositAdmin(admin.ModelAdmin):
     # changed fields (created_at, admin_notes) are persisted independently
     # so they're never silently dropped by _approve/_reject's own
     # update_fields=["status", "processed_at"] save.
+    #
+    # Manually creating a deposit (add page) goes through the same
+    # approve/reject logic too: it's saved first as "pending" (with no
+    # wallet effect), then immediately approved/rejected if the admin chose
+    # a final status, so wallet crediting and emails always happen through
+    # one code path regardless of whether the deposit came from a user or
+    # was entered by an admin.
     # ------------------------------------------------------------------
 
     def save_model(self, request, obj, form, change):
-        if not change or "status" not in form.changed_data:
-            # New object (shouldn't normally happen — deposits are created
-            # via the API) or no status change: save as-is.
+        if not change:
+            desired_status = obj.status
+            obj.status = "pending"
+            obj.processed_at = None
+            super().save_model(request, obj, form, change)
+
+            if desired_status == "approved":
+                self._approve(request, obj)
+            elif desired_status == "rejected":
+                self._reject(request, obj)
+            return
+
+        if "status" not in form.changed_data:
             super().save_model(request, obj, form, change)
             return
 
